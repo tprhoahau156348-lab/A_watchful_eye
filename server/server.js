@@ -9,11 +9,11 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
-connectDB();
 
 app.use('/api/alerts', alertsRouter);
 
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+connectDB().then(() => {
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+    });
 });
-
