@@ -2,6 +2,23 @@ import express from 'express';
 import { getDB } from '../db.js';
 import { ObjectId } from 'mongodb';
 
+const PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
+const ARENAS = ['North', 'South', 'Center'];
+const STATUSES = ['Active', 'Handled'];
+
+const isNonEmptyString = (v) => typeof v === 'string' && v.trim() !== '';
+
+function validateAlert({ displayName, description, priority, status, arena, lon, lat }) {
+    if (!isNonEmptyString(displayName)) return 'displayName is required';
+    if (!isNonEmptyString(description)) return 'description is required';
+    if (!PRIORITIES.includes(priority)) return 'priority must be one of: ' + PRIORITIES.join(', ');
+    if (!ARENAS.includes(arena)) return 'arena must be one of: ' + ARENAS.join(', ');
+    if (!STATUSES.includes(status)) return 'status must be one of: ' + STATUSES.join(', ');
+    if (typeof lon !== 'number' || lon < 34 || lon > 36) return 'lon must be a number between 34 and 36';
+    if (typeof lat !== 'number' || lat < 29 || lat > 34) return 'lat must be a number between 29 and 34';
+    return null;
+}
+
 const router = express.Router();
 
 router.get('/', async (req, res) => {
@@ -17,22 +34,14 @@ router.get('/', async (req, res) => {
 
 router.post('/', async (req, res) => {
     try {
-        const { displayName, description, priority, status, arena, lon, lat } = req.body;
+        const { displayName, description, priority, status, arena, lon, lat, x, y } = req.body;
+
+        const finalLon = lon !== undefined ? lon: x;
+        const finalLat = lat !== undefined ? lat: y;
         
-                if (
-            typeof displayName !== 'string' || !displayName.trim() ||
-            typeof description !== 'string' || !description.trim() ||
-            typeof priority !== 'string' || !priority.trim() ||
-            typeof status !== 'string' || !status.trim() ||
-            typeof arena !== 'string' || !arena.trim() ||
-            typeof lon !== 'number' ||
-            typeof lat !== 'number'
-        ) {
-            return res.status(400).json({ message: 'Missing or invalid fields' });
-        }
-
-
-        const newAlert = { displayName, description, priority, status, arena, lon, lat };
+        const error = validateAlert({ displayName, description, priority, status, arena, lon: finalLon, lat: finalLat });
+        if (error) return res.status(400).json({ message: error });
+        const newAlert = { displayName, description, priority, status, arena, lon: finalLon, lat: finalLat };        
         const db = getDB();
         const result = await db.collection('alerts').insertOne(newAlert);
         newAlert._id = result.insertedId;
@@ -45,6 +54,9 @@ router.post('/', async (req, res) => {
 
 router.get('/:id', async (req, res) => {
     try {
+        if (!ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ message: 'Invalid id' });
+        }
         const db = getDB();
         const alert = await db.collection('alerts').findOne({ _id: new ObjectId(req.params.id) });
         if (!alert) return res.status(404).json({ message: 'Alert not found' });
@@ -55,28 +67,23 @@ router.get('/:id', async (req, res) => {
 });
 
 
-router.put('/:id', async (req,res) =>{
+router.put('/:id', async (req, res) => {
     try {
-
-        const { displayName, description, priority, status, arena, lon, lat } = req.body;
-        
-                if (
-            typeof displayName !== 'string' || !displayName.trim() ||
-            typeof description !== 'string' || !description.trim() ||
-            typeof priority !== 'string' || !priority.trim() ||
-            typeof status !== 'string' || !status.trim() ||
-            typeof arena !== 'string' || !arena.trim() ||
-            typeof lon !== 'number' ||
-            typeof lat !== 'number'
-        ) {
-            return res.status(400).json({ message: 'Missing or invalid fields' });
+        if (!ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ message: 'Invalid id' });
         }
+        const { displayName, description, priority, status, arena, lon, lat, x, y } = req.body;
 
+        const finalLon = lon !== undefined ? lon: x;
+        const finalLat = lat !== undefined ? lat: y;
+        
+        const error = validateAlert({ displayName, description, priority, status, arena, lon: finalLon, lat: finalLat });
+        if (error) return res.status(400).json({ message: error });
 
         const db = getDB();
         const result = await db.collection('alerts').findOneAndUpdate(
             { _id: new ObjectId(req.params.id) },
-            { $set: { displayName, description, priority, status, arena, lon, lat } },
+            { $set: { displayName, description, priority, status, arena, lon: finalLon, lat: finalLat } },
             { returnDocument: 'after' }
         );
         
@@ -85,7 +92,6 @@ router.put('/:id', async (req,res) =>{
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
-
 })
 
 
