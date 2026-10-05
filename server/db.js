@@ -10,8 +10,9 @@ export const connectDB = async () => {
         await client.connect();
         db = client.db("alertsdb");
     } catch (error) {
-        process.exit(1);
-    }
+    console.error('Failed to connect to MongoDB:', error.message);
+    process.exit(1);
+}
 };
 
 export const getDB = () => db;
