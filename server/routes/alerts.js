@@ -53,3 +53,37 @@ router.get('/:id', async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 });
+
+
+router.put('/:id', async (req,res) =>{
+    try {
+
+        const { displayName, description, priority, status, arena, lon, lat } = req.body;
+        
+                if (
+            typeof displayName !== 'string' || !displayName.trim() ||
+            typeof description !== 'string' || !description.trim() ||
+            typeof priority !== 'string' || !priority.trim() ||
+            typeof status !== 'string' || !status.trim() ||
+            typeof arena !== 'string' || !arena.trim() ||
+            typeof lon !== 'number' ||
+            typeof lat !== 'number'
+        ) {
+            return res.status(400).json({ message: 'Missing or invalid fields' });
+        }
+
+
+        const db = getDB();
+        const result = await db.collection('alerts').findOneAndUpdate(
+            { _id: new ObjectId(req.params.id) },
+            { $set: { displayName, description, priority, status, arena, lon, lat } },
+            { returnDocument: 'after' }
+        );
+        
+        if (!result) return res.status(404).json({ message: 'Alert not found' });
+        res.status(200).json(result);        
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+
+})
