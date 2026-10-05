@@ -41,3 +41,15 @@ router.post('/', async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 });
+
+
+router.get('/:id', async (req, res) => {
+    try {
+        const db = getDB();
+        const alert = await db.collection('alerts').findOne({ _id: new ObjectId(req.params.id) });
+        if (!alert) return res.status(404).json({ message: 'Alert not found' });
+        res.status(200).json(alert);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
