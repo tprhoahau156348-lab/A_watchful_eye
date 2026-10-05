@@ -87,3 +87,15 @@ router.put('/:id', async (req,res) =>{
     }
 
 })
+
+
+router.delete('/:id', async (req, res) => {
+    try {
+        const db = getDB();
+        const result = await db.collection('alerts').deleteOne({ _id: new ObjectId(req.params.id) });
+        if (result.deletedCount === 0) return res.status(404).json({ message: 'Alert not found' });
+        res.status(200).json({ message: 'Alert deleted' });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+});
