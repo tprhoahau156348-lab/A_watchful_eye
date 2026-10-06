@@ -1,7 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, Link, useNavigate, useParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, useNavigate, useParams, Navigate } from 'react-router-dom';
 import { useAlertStore } from './store/useAlertStore';
+import { useAuthStore } from './store/useAuthStore';
 import AlertsMap from './components/AlertsMap';
+import Navbar from './components/Navbar';
+import { LoginPage } from './pages/LoginPage';
+import { AdminPage } from './pages/AdminPage';
+
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+    const token = useAuthStore((state) => state.token);
+    if (!token) return <Navigate to="/login" replace />;
+    return <>{children}</>;
+};
 
 const Home = () => {
     const { alerts, fetchAlerts, deleteAlert } = useAlertStore();
@@ -16,6 +26,26 @@ const Home = () => {
         }, 2000);
         return () => clearInterval(interval);
     }, [fetchAlerts]);
+    
+    const [attackWarning, setAttackWarning] = useState(false);
+
+    useEffect(() => {
+        const now = new Date().getTime();
+        const recentCriticals = alerts.filter(a => 
+            a.priority === 'Critical' && 
+            a.status === 'Active' && 
+            a.createdAt &&
+            (now - new Date(a.createdAt).getTime() <= 15000)
+        );
+
+        const arenas = new Set(recentCriticals.map(a => a.arena));
+        
+        if (arenas.has('North') && arenas.has('Center') && arenas.has('South')) {
+            setAttackWarning(true);
+        } else {
+            setAttackWarning(false);
+        }
+    }, [alerts]);
 
     const filteredAlerts = alerts.filter(alert => {
         const matchName = alert.displayName.toLowerCase().includes(search.toLowerCase());
@@ -35,7 +65,6 @@ const Home = () => {
     return (
         <div style={{ display: 'flex', gap: '20px' }}>
             <div style={{ flex: 1 }}>
-                <h1>עין צופיה - התראות</h1>
                 <Link to="/add">
                     <button>הוסף התראה</button>
                 </Link>
@@ -187,18 +216,21 @@ const AlertDetails = () => {
     );
 };
 
+
 function App() {
     return (
         <BrowserRouter>
+            <Navbar />
             <Routes>
-                <Route path="/" element={<Home />} />
-                <Route path="/add" element={<AlertForm />} />
-                <Route path="/edit/:id" element={<AlertForm isEdit />} />
-                <Route path="/alert/:id" element={<AlertDetails />} />
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+                <Route path="/add" element={<ProtectedRoute><AlertForm /></ProtectedRoute>} />
+                <Route path="/edit/:id" element={<ProtectedRoute><AlertForm isEdit /></ProtectedRoute>} />
+                <Route path="/alert/:id" element={<ProtectedRoute><AlertDetails /></ProtectedRoute>} />
+                <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
             </Routes>
         </BrowserRouter>
     );
 }
 
 export default App;
-

@@ -1,6 +1,7 @@
 import express from 'express';
 import { getDB } from '../db.js';
 import { ObjectId } from 'mongodb';
+import { protect } from '../middleware/authMiddleware.js';
 
 const PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
 const ARENAS = ['North', 'South', 'Center'];
@@ -21,10 +22,14 @@ function validateAlert({ displayName, description, priority, status, arena, lon,
 
 const router = express.Router();
 
-router.get('/', async (req, res) => {
+router.get('/', protect, async (req, res) => {
     try {
         const db = getDB();
-        const alerts = await db.collection('alerts').find().toArray();
+        let query = {};
+        if (req.user.role === 'arena_user') {
+            query.arena = req.user.assignedArena;
+        }
+        const alerts = await db.collection('alerts').find(query).toArray();
         res.status(200).json(alerts);
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
@@ -35,13 +40,12 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
     try {
         const { displayName, description, priority, status, arena, lon, lat, x, y } = req.body;
-
         const finalLon = lon !== undefined ? lon: x;
         const finalLat = lat !== undefined ? lat: y;
         
         const error = validateAlert({ displayName, description, priority, status, arena, lon: finalLon, lat: finalLat });
         if (error) return res.status(400).json({ message: error });
-        const newAlert = { displayName, description, priority, status, arena, lon: finalLon, lat: finalLat };        
+        const newAlert = {displayName, description, priority, status, arena, lon: finalLon, lat: finalLat, createdAt: new Date()};       
         const db = getDB();
         const result = await db.collection('alerts').insertOne(newAlert);
         newAlert._id = result.insertedId;
@@ -52,11 +56,9 @@ router.post('/', async (req, res) => {
 });
 
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', protect, async (req, res) => {
     try {
-        if (!ObjectId.isValid(req.params.id)) {
-            return res.status(400).json({ message: 'Invalid id' });
-        }
+        if (!ObjectId.isValid(req.params.id)) return res.status(400).json({ message: 'Invalid id' });
         const db = getDB();
         const alert = await db.collection('alerts').findOne({ _id: new ObjectId(req.params.id) });
         if (!alert) return res.status(404).json({ message: 'Alert not found' });
@@ -67,13 +69,11 @@ router.get('/:id', async (req, res) => {
 });
 
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', protect, async (req, res) => {
     try {
-        if (!ObjectId.isValid(req.params.id)) {
-            return res.status(400).json({ message: 'Invalid id' });
-        }
+        if (!ObjectId.isValid(req.params.id)) return res.status(400).json({ message: 'Invalid id' });
+        
         const { displayName, description, priority, status, arena, lon, lat, x, y } = req.body;
-
         const finalLon = lon !== undefined ? lon: x;
         const finalLat = lat !== undefined ? lat: y;
         
@@ -81,21 +81,27 @@ router.put('/:id', async (req, res) => {
         if (error) return res.status(400).json({ message: error });
 
         const db = getDB();
+        const existingAlert = await db.collection('alerts').findOne({ _id: new ObjectId(req.params.id) });
+        if (!existingAlert) return res.status(404).json({ message: 'Alert not found' });
+
+        if (req.user.role === 'arena_user' && status !== existingAlert.status) {
+            return res.status(403).json({ message: 'arena_user cannot change status' });
+        }
+        
         const result = await db.collection('alerts').findOneAndUpdate(
             { _id: new ObjectId(req.params.id) },
             { $set: { displayName, description, priority, status, arena, lon: finalLon, lat: finalLat } },
             { returnDocument: 'after' }
         );
         
-        if (!result) return res.status(404).json({ message: 'Alert not found' });
         res.status(200).json(result);        
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
-})
+});
 
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', protect, async (req, res) => {
     try {
         const db = getDB();
         const result = await db.collection('alerts').deleteOne({ _id: new ObjectId(req.params.id) });

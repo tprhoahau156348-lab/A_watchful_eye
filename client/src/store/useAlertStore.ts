@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import axios from 'axios';
+import { useAuthStore } from './useAuthStore';
 
 export interface Alert {
     _id: string;
@@ -10,7 +11,9 @@ export interface Alert {
     arena: string;
     lon: number;
     lat: number;
+    createdAt?: string;
 }
+
 
 interface AlertStore {
     alerts: Alert[];
@@ -21,28 +24,42 @@ interface AlertStore {
     deleteAlert: (id: string) => Promise<void>;
 }
 
+const getAuthHeaders = () => {
+    const token = useAuthStore.getState().token;
+    return {
+        headers: {
+            Authorization: `Bearer ${token}`
+        }
+    };
+};
+
 export const useAlertStore = create<AlertStore>((set) => ({
     alerts: [],
     fetchAlertById: async (id) => {
-        const res = await axios.get(`http://localhost:3001/api/alerts/${id}`);
+        const res = await axios.get(`http://localhost:3001/api/alerts/${id}`, getAuthHeaders());
         return res.data;
     },
+
     fetchAlerts: async () => {
-        const res = await axios.get(`http://localhost:3001/api/alerts`);
-        set({ alerts: res.data });
+        try {
+            const res = await axios.get('http://localhost:3001/api/alerts', getAuthHeaders());
+            set({ alerts: res.data });
+        } catch (e) {
+            console.error(e);
+        }
     },
     addAlert: async (alert) => {
-        const res = await axios.post(`http://localhost:3001/api/alerts`, alert);
+        const res = await axios.post('http://localhost:3001/api/alerts', alert, getAuthHeaders());
         set((state) => ({ alerts: [...state.alerts, res.data] }));
     },
     updateAlert: async (id, alert) => {
-        const res = await axios.put(`http://localhost:3001/api/alerts/${id}`, alert);
+        const res = await axios.put(`http://localhost:3001/api/alerts/${id}`, alert, getAuthHeaders());
         set((state) => ({
             alerts: state.alerts.map((a) => (a._id === id ? res.data : a)),
         }));
     },
     deleteAlert: async (id) => {
-        await axios.delete(`http://localhost:3001/api/alerts/${id}`);
+        await axios.delete(`http://localhost:3001/api/alerts/${id}`, getAuthHeaders());
         set((state) => ({
             alerts: state.alerts.filter((a) => a._id !== id),
         }));
